@@ -1,0 +1,45 @@
+name: Extract Firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      firmware_url:
+        description: 'Firmware archive URL'
+        required: true
+        type: string
+      repo_name:
+        description: 'Repository name (optional, defaults to CODENAME_dump)'
+        required: false
+        type: string
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y cpio gzip squashfs-tools binwalk device-tree-compiler wget git file zstd u-boot-tools build-essential bison flex libssl-dev libgnutls28-dev
+      
+      - name: Build u-boot tools
+        run: |
+          git clone --depth 1 https://github.com/u-boot/u-boot.git /tmp/u-boot
+          cd /tmp/u-boot
+          make tools-only_defconfig
+          make tools-only -j$(nproc)
+          sudo cp tools/dumpimage /usr/local/bin/
+          sudo cp tools/mkimage /usr/local/bin/
+      
+      - name: Run extraction script
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_USER: ${{ secrets.GH_USER }}
+          GH_REPO: ${{ inputs.repo_name }}
+          GIT_USER_EMAIL: ${{ secrets.GIT_USER_EMAIL }}
+          GIT_USER_NAME: ${{ secrets.GIT_USER_NAME }}
+        run: |
+          sudo -E bash extract.sh "${{ inputs.firmware_url }}"
